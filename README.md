@@ -2,7 +2,7 @@
 ## Objective
 Build a real-time data pipeline for a supermarket cash flow system using Apache Kafka. The goal is to ingest events from multiple cash registers, stream them through Kafka, and process them to produce hourly statistics.
 
-## Requirements
+### Requirements
 
 1. Event Source
 Each cash register sends events in real time with the following fields:
@@ -58,3 +58,65 @@ CREATE STREAM cashflow_stream (timestamp DOUBLE, shop_id VARCHAR, order_id VARCH
 
 SELECT product_id, quantity, price, (price * quantity) as revenue FROM cashflow_stream EMIT CHANGES
     
+## Quickstart
+Run docker containers.
+```sh
+# Start with 3 cash registers.
+docker compose up --scale register=3
+
+# Create Kafka Topic.
+./kafka-topics.sh --create --topic cash_flow --bootstrap-server localhost:9092
+
+# [Optional] Try to consume Kafka events.
+./kafka-console-consumer.sh --topic cash_flow --bootstrap-server localhost:9092
+```
+Create and process data streams.
+```sh
+# Run ksql admin console.
+sudo docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
+```
+```sql
+-- Create a stream to perform sql queries from on our Kafka topic.
+CREATE STREAM cash_stream (
+    timestamp VARCHAR,
+    shop_id VARCHAR,
+    order_id VARCHAR,
+    product_id VARCHAR,
+    quantity INT,
+    price DOUBLE
+) WITH (
+    KAFKA_TOPIC='cash_flow',
+    VALUE_FORMAT='JSON'
+);
+
+-- [Optional] Try to select only next 5 incoming events.
+SELECT * FROM cash_stream EMIT CHANGES LIMIT 5;
+
+-- Create a table to hold the hourly cash flow for each shop.
+CREATE TABLE hourly_cash_per_shop AS
+SELECT
+  shop_id,
+  WINDOWSTART AS window_start,
+  WINDOWEND AS window_end,
+  SUM(quantity * price) AS total_revenue
+FROM cash_stream
+WINDOW TUMBLING (SIZE 1 HOUR)
+GROUP BY shop_id
+EMIT CHANGES;
+
+```
+Start the Express server to make the GET endpoint [http://localhost:3000/hourly_cash_per_shop](http://localhost:3000/hourly_cash_per_shop) accessible. 
+```sh
+cd api
+npm install
+npm start
+```
+Start the Vue client application to see the dasboard updated in real time.
+```sh
+cd client
+# or yarn
+npm install
+# or yarn dev
+npm run dev
+```
+The dashboard should be accessible at [http://localhost:5173](http://localhost:5173).

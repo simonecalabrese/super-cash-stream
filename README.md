@@ -58,6 +58,18 @@ CREATE STREAM cashflow_stream (timestamp DOUBLE, shop_id VARCHAR, order_id VARCH
 
 SELECT product_id, quantity, price, (price * quantity) as revenue FROM cashflow_stream EMIT CHANGES
     
+
+## Project Structure
+This project follows a structure that slightly differs from the assigned objective.
+```mermaid
+flowchart LR
+    A[Cash Registers] -->|JSON Events| B[Kafka Topic: cash_flow]
+    B --> C[ksqlDB for Queries on streams]
+    C --> D[Express api server]
+    D --> E[Vue client dashboard]
+```
+
+
 ## Quickstart
 Run docker containers.
 ```sh
